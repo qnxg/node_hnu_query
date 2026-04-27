@@ -30,9 +30,9 @@
 ## 安装
 
 ```bash
-pnpm add @twisuki/hnu-query
+pnpm add @qnxg/hnu-query
 # 或
-npm install @twisuki/hnu-query
+npm install @qnxg/hnu-query
 ```
 
 ## 快速开始
@@ -44,7 +44,7 @@ import {
   createCasToken,
   acquireHdjwToken,
   getGrade,
-} from "@twisuki/hnu-query"
+} from "@qnxg/hnu-query"
 
 const stuId = ""
 const password = ""
