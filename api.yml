@@ -1,0 +1,2607 @@
+openapi: 3.1.0
+info:
+  title: HNU Query API
+  description: |
+    湖南大学（HNU）多系统统一查询 SDK 的 OpenAPI 接口规范。
+
+    ## 支持系统
+    - **CAS**: 统一身份认证（所有系统的登录入口）
+    - **HDJW**: 教务系统（成绩、课程表、空教室、考试安排、排名）
+    - **GYM**: 体测系统（预约、成绩）
+    - **LAB**: 大物实验平台（课程、实验安排、成绩）
+    - **NETFLOW**: 校园网流量（流量明细、账单、锁定状态）
+    - **PT**: 个人门户（一卡通、邮件）
+    - **XGXT**: 学工系统（个人信息、宿舍）
+    - **CA**: 可信电子凭证（成绩排名）
+    - **WXPAY**: 微信支付（宿舍电量）
+
+    ## 认证流程
+    1. 通过 `POST /auth/cas/create` 获取 `CasToken`
+    2. 使用 `CasToken` 通过各系统的 `acquire_by_cas_login` 方法获取对应系统 Token
+    3. 使用各系统 Token 调用对应数据接口
+
+    ## 错误处理
+    所有接口均可能返回标准错误响应，错误码定义在 `components/schemas/Error` 中。
+  version: 0.0.1
+  contact:
+    name: HNU Query Project
+    url: https://code.qnxg.cn/qnxg/hnu_query
+
+servers:
+  - url: http://hdjw.hnu.edu.cn
+    description: 教务系统
+  - url: http://gymos.hnu.edu.cn
+    description: 体测系统
+  - url: http://10.62.106.112
+    description: 大物实验平台
+  - url: http://ll.hnu.edu.cn
+    description: 校园网流量系统
+  - url: https://pt.hnu.edu.cn
+    description: 个人门户
+  - url: http://xgxt.hnu.edu.cn
+    description: 学工系统
+  - url: https://ca.hnu.edu.cn
+    description: 可信电子凭证
+
+tags:
+  - name: Auth
+    description: 统一身份认证与各系统 Token 获取
+  - name: HDJW
+    description: 教务系统（成绩、课程表、空教室、考试安排、排名）
+  - name: GYM
+    description: 体测系统（预约、成绩）
+  - name: LAB
+    description: 大物实验平台（课程、实验安排、成绩）
+  - name: NETFLOW
+    description: 校园网流量系统（流量明细、账单、锁定状态）
+  - name: PT
+    description: 个人门户（一卡通、邮件）
+  - name: XGXT
+    description: 学工系统（个人信息、宿舍）
+  - name: CA
+    description: 可信电子凭证（成绩排名）
+  - name: WXPAY
+    description: 微信支付（宿舍电量）
+
+paths:
+  # ===== Auth - 统一身份认证与 Token 获取 =====
+
+  /auth/cas/create:
+    post:
+      tags: [Auth]
+      operationId: createCasToken
+      summary: 创建 CAS Token（通过账号密码）
+      description: |
+        通过学号和个人门户密码创建一个 CAS Token。
+        CAS Token 是所有其他系统 Token 的获取基础，建议妥善保存以便复用。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCasTokenRequest'
+            example:
+              stu_id: "202463010001"
+              password: "your_password"
+      responses:
+        '200':
+          description: CAS Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CasTokenResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: 账号认证失败（密码错误/账号锁定/需修改密码）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /auth/cas/from-cookie:
+    post:
+      tags: [Auth]
+      operationId: createCasTokenFromCookie
+      summary: 从 Cookie 创建 CAS Token（缓存恢复）
+      description: |
+        通过已保存的 Cookie、学号和密码创建 CAS Token，用于缓存恢复。
+        **前提条件**：Cookie 必须是有效的，stu_id 和 password 必须与 Cookie 对应。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CasTokenFromCookieRequest'
+      responses:
+        '200':
+          description: CAS Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CasTokenResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ----- HDJW Token -----
+
+  /hdjw/token:
+    post:
+      tags: [Auth]
+      operationId: acquireHdjwToken
+      summary: 获取教务系统 Token
+      description: 通过 CAS Token 获取教务系统的访问令牌。需先通过 `/auth/cas/create` 获取有效的 CAS Token。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 教务系统 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HdjwTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+        '422':
+          description: CAS Token 无效或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /hdjw/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createHdjwTokenFromHeaders
+      summary: 从 HeaderMap 创建教务系统 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HdjwTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 教务系统 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HdjwTokenResponse'
+
+  # ----- GYM Token -----
+
+  /gym/token/cas:
+    post:
+      tags: [Auth]
+      operationId: acquireGymTokenByCas
+      summary: 通过 CAS 获取体测系统 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 体测系统 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /gym/token/direct:
+    post:
+      tags: [Auth]
+      operationId: acquireGymTokenByDirect
+      summary: 通过账号密码直接登录体测系统
+      description: |
+        直接通过学号和体测系统密码登录体测系统（一般与个人门户密码相同）。
+        与 CAS 登录方式不同，这是体测系统的独立登录接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DirectLoginRequest'
+      responses:
+        '200':
+          description: 体测系统 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymTokenResponse'
+
+  /gym/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createGymTokenFromHeaders
+      summary: 从 HeaderMap 创建体测系统 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GymTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 体测系统 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymTokenResponse'
+
+  # ----- LAB Token -----
+
+  /lab/token:
+    post:
+      tags: [Auth]
+      operationId: acquireLabToken
+      summary: 获取大物实验平台 Token
+      description: |
+        通过学号、大物实验平台密码和验证码识别器获取大物实验平台的访问令牌。
+        - 大物实验平台密码可能与个人门户密码不同
+        - 验证码识别器需实现 CaptchaResolver trait
+        - 支持自动重试，重试次数由 max_tried 指定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabTokenAcquireRequest'
+      responses:
+        '200':
+          description: 大物实验平台 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabTokenResponse'
+        '401':
+          description: 登录失败（密码错误/验证码错误）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabLoginIssueError'
+
+  /lab/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createLabTokenFromHeaders
+      summary: 从 HeaderMap 创建大物实验平台 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 大物实验平台 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabTokenResponse'
+
+  # ----- NETFLOW Token -----
+
+  /netflow/token:
+    post:
+      tags: [Auth]
+      operationId: acquireNetflowToken
+      summary: 获取校园网流量系统 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 校园网流量系统 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetflowTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /netflow/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createNetflowTokenFromHeaders
+      summary: 从 HeaderMap 创建校园网流量系统 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetflowTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 校园网流量系统 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetflowTokenResponse'
+
+  # ----- PT Token -----
+
+  /pt/token:
+    post:
+      tags: [Auth]
+      operationId: acquirePtToken
+      summary: 获取个人门户 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 个人门户 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PtTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /pt/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createPtTokenFromHeaders
+      summary: 从 HeaderMap 创建个人门户 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PtTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 个人门户 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PtTokenResponse'
+
+  # ----- XGXT Token -----
+
+  /xgxt/token:
+    post:
+      tags: [Auth]
+      operationId: acquireXgxtToken
+      summary: 获取学工系统 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 学工系统 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XgxtTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /xgxt/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createXgxtTokenFromHeaders
+      summary: 从 HeaderMap 创建学工系统 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/XgxtTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 学工系统 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XgxtTokenResponse'
+
+  # ----- CA Token -----
+
+  /ca/token:
+    post:
+      tags: [Auth]
+      operationId: acquireCaToken
+      summary: 获取可信电子凭证 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenAcquireRequest'
+      responses:
+        '200':
+          description: 可信电子凭证 Token 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaTokenResponse'
+        '401':
+          description: 账号认证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountIssueError'
+
+  /ca/token/from-headers:
+    post:
+      tags: [Auth]
+      operationId: createCaTokenFromHeaders
+      summary: 从 HeaderMap 创建可信电子凭证 Token（缓存恢复）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaTokenFromHeadersRequest'
+      responses:
+        '200':
+          description: 可信电子凭证 Token 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaTokenResponse'
+
+  # ===== HDJW - 教务系统 =====
+
+  /hdjw/grades:
+    get:
+      tags: [HDJW]
+      operationId: getGrade
+      summary: 获取课程成绩列表
+      description: |
+        获取指定学年学期的课程成绩列表。
+        支持主修和辅修成绩，包含学分、绩点、分数、成绩标识（缓考/重修等）。
+      parameters:
+        - name: xn
+          in: query
+          required: true
+          description: 学年（如 2025）
+          schema:
+            type: integer
+            minimum: 2000
+            maximum: 2100
+            example: 2025
+        - name: xq
+          in: query
+          required: true
+          description: 学期（1=第一学期，2=第二学期）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2
+            example: 1
+        - name: hdjw_token
+          in: query
+          required: true
+          description: 教务系统 Token（通过 `/hdjw/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成绩列表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Grade'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  /hdjw/grades/{jx0404id}/detail:
+    get:
+      tags: [HDJW]
+      operationId: getGradeDetail
+      summary: 获取课程成绩详情
+      description: |
+        获取某门课程成绩的组成部分详情（如平时成绩占比、期中成绩占比、期末成绩占比等）。
+        jx0404id 通过 `get_grade` 返回的 Grade.jx0404id 字段获取。
+      parameters:
+        - name: jx0404id
+          in: path
+          required: true
+          description: 课程成绩 ID
+          schema:
+            type: string
+        - name: hdjw_token
+          in: query
+          required: true
+          description: 教务系统 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成绩详情获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GradeDetailItem'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  /hdjw/class-table:
+    get:
+      tags: [HDJW]
+      operationId: getClassTable
+      summary: 获取课程表（有课表课程）
+      description: |
+        获取指定学年学期的课程表信息，包含每门课程的上课时间、地点、教师等信息。
+        schedule 字段中的 time 为大节次（1-5），day 为星期几（1=周一，7=周日）。
+      parameters:
+        - name: xn
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: xq
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: hdjw_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 课程表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Course'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  /hdjw/class-table/extra:
+    get:
+      tags: [HDJW]
+      operationId: getClassTableExtra
+      summary: 获取无课表课程列表
+      description: 获取指定学年学期中没有排课的课程列表（仅缺少上课时间和地点信息）。
+      parameters:
+        - name: xn
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: xq
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: hdjw_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 无课表课程列表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExtraCourse'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  /hdjw/empty-classroom:
+    get:
+      tags: [HDJW]
+      operationId: getEmptyClassroom
+      summary: 查询空教室
+      description: |
+        查询指定楼栋、时段内的空余教室。
+        - time 参数为大节次，只支持 [1, 5]，不支持第 6 大节
+        - 楼栋 ID 参考 docs/hdjw/building.md
+        - 只有当所有节次均为空时，该教室才被视为空教室
+      parameters:
+        - name: building_id
+          in: query
+          required: true
+          description: 楼栋 ID（参考 docs/hdjw/building.md）
+          schema:
+            type: string
+            example: "001"
+        - name: week
+          in: query
+          required: true
+          description: 第几周（1-18）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 18
+            example: 10
+        - name: day
+          in: query
+          required: true
+          description: 星期几（1=周一，7=周日）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 7
+            example: 1
+        - name: time
+          in: query
+          required: true
+          description: 大节次数组（只支持 1-5）
+          schema:
+            type: array
+            items:
+              type: integer
+              minimum: 1
+              maximum: 5
+            example: [1, 2]
+        - name: xn
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: xq
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: hdjw_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 空教室查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmptyClassroom'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+        '400':
+          description: 参数错误（time 包含不支持的大节次）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /hdjw/exam-schedule:
+    get:
+      tags: [HDJW]
+      operationId: getExamSchedule
+      summary: 获取考试安排
+      description: 获取指定学年学期的考试安排信息（考场、时间、座位号等）。
+      parameters:
+        - name: xn
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: xq
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+        - name: hdjw_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 考试安排获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExamSchedule'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  /hdjw/rank:
+    get:
+      tags: [HDJW]
+      operationId: getRank
+      summary: 获取成绩排名
+      description: |
+        获取指定学年学期范围和课程类型范围内的成绩排名。
+        支持多种排名方式（算术平均、加权平均、绩点）。
+        仅计算主修课，辅修课不包含在内。
+      parameters:
+        - name: selection
+          in: query
+          required: true
+          description: 学年学期列表，格式为 "xn1-xq1,xn2-xq2,..."
+          schema:
+            type: string
+            example: "2025-1"
+        - name: range
+          in: query
+          required: true
+          description: 课程范围，多个用逗号分隔
+          schema:
+            type: string
+            example: "03,05,11,12,16"
+        - name: rank_method
+          in: query
+          required: true
+          description: 排名计算方式
+          schema:
+            $ref: '#/components/schemas/RankMethod'
+        - name: hdjw_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 排名获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rank'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExpiredError'
+
+  # ===== GYM - 体测系统 =====
+
+  /gym/appointment:
+    get:
+      tags: [GYM]
+      operationId: getAppointment
+      summary: 获取体测预约信息
+      description: |
+        获取当前用户的体测预约信息，包含预约名称、时间、地点、体测类型和状态等。
+        体测类型包括：身高体重、肺活量、立定跳远、坐位体前屈、引体向上/仰卧起坐、50米、800米/1000米、视力等。
+      parameters:
+        - name: gym_token
+          in: query
+          required: true
+          description: 体测系统 Token（通过 `/gym/token/cas` 或 `/gym/token/direct` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 体测预约信息获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Appointment'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymTokenExpiredError'
+
+  /gym/grade:
+    get:
+      tags: [GYM]
+      operationId: getGymGrade
+      summary: 获取体测成绩
+      description: |
+        获取指定学年的体测成绩，包含总成绩和各分项成绩。
+        分项包括：视力、50米、BMI、立定跳远、引体向上/仰卧起坐、800米/1000米、坐位体前屈、肺活量。
+        每个分项都包含等级颜色、等级（优秀/良好/及格/不及格）、成绩数据和得分。
+      parameters:
+        - name: xn
+          in: query
+          required: true
+          description: 学年
+          schema:
+            type: integer
+            example: 2025
+        - name: gym_token
+          in: query
+          required: true
+          description: 体测系统 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 体测成绩获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymGrade'
+        '422':
+          description: Token 过期或无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GymTokenExpiredError'
+
+  # ===== LAB - 大物实验平台 =====
+
+  /lab/semester:
+    get:
+      tags: [LAB]
+      operationId: getSemester
+      summary: 获取大物实验平台学期列表
+      description: |
+        获取大物实验平台支持的学期列表。
+        返回每个学期包含学年、学期号和学期 ID，学期 ID 需用于后续课程列表和成绩查询。
+      parameters:
+        - name: lab_token
+          in: query
+          required: true
+          description: 大物实验平台 Token（通过 `/lab/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 学期列表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Semester'
+
+  /lab/course:
+    get:
+      tags: [LAB]
+      operationId: getCourseList
+      summary: 获取大物实验课程列表
+      description: |
+        获取指定学期下的大物实验课程列表及其总成绩。
+        课程成绩为 None 表示暂时没有成绩。
+      parameters:
+        - name: semester_id
+          in: query
+          required: true
+          description: 学期 ID（通过 `/lab/semester` 获取）
+          schema:
+            type: string
+        - name: lab_token
+          in: query
+          required: true
+          description: 大物实验平台 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 课程列表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabCourse'
+
+  /lab/schedule:
+    get:
+      tags: [LAB]
+      operationId: getLabSchedule
+      summary: 获取大物实验安排
+      description: |
+        获取当前用户的所有大物实验安排信息。
+        包含座位号、实验名称、课程名称、授课老师、周次、星期、日期时间、地点、联系电话和邮箱。
+      parameters:
+        - name: lab_token
+          in: query
+          required: true
+          description: 大物实验平台 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 实验安排获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabSchedule'
+
+  /lab/grade:
+    get:
+      tags: [LAB]
+      operationId: getLabGrade
+      summary: 获取某课程的大物实验成绩
+      description: |
+        获取指定课程和学期下的大物实验成绩列表，包含出勤情况和成绩组成详情。
+        仅返回已有成绩的非虚拟实验。
+      parameters:
+        - name: course_id
+          in: query
+          required: true
+          description: 课程 ID（通过 `/lab/course` 获取）
+          schema:
+            type: string
+        - name: semester_id
+          in: query
+          required: true
+          description: 学期 ID（通过 `/lab/semester` 获取）
+          schema:
+            type: string
+        - name: lab_token
+          in: query
+          required: true
+          description: 大物实验平台 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 实验成绩获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LabGrade'
+
+  /lab/grade/virtual:
+    get:
+      tags: [LAB]
+      operationId: getVirtualLabGrade
+      summary: 获取虚拟实验成绩
+      description: 获取当前用户的所有虚拟实验成绩列表。
+      parameters:
+        - name: lab_token
+          in: query
+          required: true
+          description: 大物实验平台 Token
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 虚拟实验成绩获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VirtualLabGrade'
+
+  # ===== NETFLOW - 校园网流量系统 =====
+
+  /netflow/this-month:
+    get:
+      tags: [NETFLOW]
+      operationId: getThisMonthInfo
+      summary: 获取本月校园网使用信息
+      description: |
+        获取本月校园网流量使用情况，包含总流量、上传/下载流量、免费流量和超出流量的使用详情。
+        所有流量数据带单位显示（如 "7.54GB"），也可能为 "小于0.01GB"。
+      parameters:
+        - name: netflow_token
+          in: query
+          required: true
+          description: 校园网流量系统 Token（通过 `/netflow/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 本月使用信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThisMonthInfo'
+
+  /netflow/detail/month:
+    get:
+      tags: [NETFLOW]
+      operationId: getMonthDetail
+      summary: 获取月流量明细
+      description: |
+        获取指定年月的流量明细，包含总流量和按应用分类的流量使用详情。
+        单位为 KB，百分比为 [0, 1] 之间的小数。
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 3
+        - name: netflow_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 月流量明细获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetflowDetail'
+
+  /netflow/detail/day:
+    get:
+      tags: [NETFLOW]
+      operationId: getDayDetail
+      summary: 获取日流量明细
+      description: 获取指定日期的流量明细，结构同月流量明细。
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 3
+        - name: day
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 31
+            example: 15
+        - name: netflow_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 日流量明细获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetflowDetail'
+
+  /netflow/order:
+    get:
+      tags: [NETFLOW]
+      operationId: getOrder
+      summary: 获取校园网流量账单
+      description: 获取校园网流量历史账单信息，包含使用流量和应缴费用。
+      parameters:
+        - name: netflow_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 账单信息获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderItem'
+
+  /netflow/pay-info:
+    get:
+      tags: [NETFLOW]
+      operationId: getOverduePayment
+      summary: 获取欠费金额
+      description: 获取校园网流量账户的欠费金额。
+      parameters:
+        - name: netflow_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 欠费信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverduePaymentResponse'
+
+  /netflow/unlock-status:
+    get:
+      tags: [NETFLOW]
+      operationId: getUnlockStatus
+      summary: 获取校园网流量账户锁定状态
+      description: 获取当前用户的校园网流量账户是否被锁定。
+      parameters:
+        - name: netflow_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 锁定状态获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnlockStatusResponse'
+
+  # ===== PT - 个人门户 =====
+
+  /pt/card:
+    get:
+      tags: [PT]
+      operationId: getCardInfo
+      summary: 获取校园卡信息
+      description: 获取当前用户的校园卡账号和余额信息。
+      parameters:
+        - name: pt_token
+          in: query
+          required: true
+          description: 个人门户 Token（通过 `/pt/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 校园卡信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardInfo'
+
+  /pt/card/history:
+    get:
+      tags: [PT]
+      operationId: getCardHistory
+      summary: 获取校园卡消费/充值历史
+      description: |
+        获取指定年月的校园卡消费或充值历史记录。
+        history_type 为 "consumption" 时查询消费记录，为 "recharge" 时查询充值记录。
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2025
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 3
+        - name: history_type
+          in: query
+          required: true
+          description: 历史记录类型
+          schema:
+            $ref: '#/components/schemas/CardHistoryType'
+        - name: pt_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 校园卡消费历史获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardHistory'
+
+  /pt/email/unread-count:
+    get:
+      tags: [PT]
+      operationId: getUnreadEmailCount
+      summary: 获取未读邮件数
+      description: |
+        获取当前用户的未读邮件数量。
+        返回 None 表示未绑定邮箱，需前往个人门户 -> 安全中心绑定邮箱。
+      parameters:
+        - name: pt_token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 未读邮件数获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadEmailCountResponse'
+
+  # ===== XGXT - 学工系统 =====
+
+  /xgxt/personal-info:
+    get:
+      tags: [XGXT]
+      operationId: getPersonInfo
+      summary: 获取个人信息
+      description: |
+        获取当前用户的完整个人信息，包含姓名、学号、年级、性别、培养层次、学院、专业、班级、宿舍、政治面貌、民族、籍贯、联系方式等。
+        **注意**：此接口会同时发起多个请求且返回数据量较大（包含大量历史班级数据），建议做好缓存。
+      parameters:
+        - name: xgxt_token
+          in: query
+          required: true
+          description: 学工系统 Token（通过 `/xgxt/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 个人信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalInfo'
+
+  # ===== CA - 可信电子凭证 =====
+
+  /ca/grade-rank:
+    get:
+      tags: [CA]
+      operationId: getGradeRank
+      summary: 获取可信电子凭证中的成绩排名
+      description: |
+        获取本科生可信电子凭证中的成绩排名信息。
+        仅计算主修课，辅修课不计算在内。
+        包含全部课程和必修课的平均学分绩点、加权平均分、算术平均分及其排名，以及核心课程的排名信息。
+      parameters:
+        - name: ca_token
+          in: query
+          required: true
+          description: 可信电子凭证 Token（通过 `/ca/token` 获取）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成绩排名获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaRank'
+
+  # ===== WXPAY - 微信支付（宿舍电量） =====
+
+  /wxpay/electricity:
+    get:
+      tags: [WXPAY]
+      operationId: getElectricity
+      summary: 获取宿舍电量
+      description: |
+        获取指定宿舍的当前电量信息。
+        **前提条件**：dormitory 必须成功解析（可通过 `/xgxt/personal-info` 获取 Dormitory，
+        并使用 `Dormitory::successfully_parsed()` 判断）。
+        电量单位不固定，可能为"度"、"元"或其他格式。
+      parameters:
+        - name: park
+          in: query
+          required: true
+          description: 园区名称
+          schema:
+            type: string
+            example: "天马园区"
+        - name: build
+          in: query
+          required: true
+          description: 楼栋名称
+          schema:
+            type: string
+            example: "一区1栋"
+        - name: room
+          in: query
+          required: true
+          description: 房间号
+          schema:
+            type: string
+            example: "101"
+      responses:
+        '200':
+          description: 电量信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElectricityResponse'
+        '400':
+          description: 参数错误（宿舍信息解析失败）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+# ============================================================
+# components
+# ============================================================
+
+components:
+  schemas:
+
+    # ===== 通用错误 =====
+
+    Error:
+      type: object
+      description: 标准错误响应
+      properties:
+        error:
+          type: string
+          description: 错误类型
+          enum: [Unexpected, NetworkError, ParseError, Other]
+        message:
+          type: string
+          description: 错误描述信息
+        detail:
+          type: string
+          description: 详细错误信息（仅某些错误类型有）
+
+    AccountIssueError:
+      type: object
+      description: 账号问题导致的登录失败
+      properties:
+        error:
+          type: string
+          example: AccountIssue
+        code:
+          type: string
+          enum: [PASSWORD_ERROR, PASSWORD_SHOULD_CHANGE, ACCOUNT_LOCKED]
+          description: 错误代码
+        message:
+          type: string
+          description: 错误描述
+
+    TokenExpiredError:
+      type: object
+      description: 令牌过期错误（教务系统）
+      properties:
+        error:
+          type: string
+          example: TokenExpired
+        message:
+          type: string
+          example: 教务系统令牌过期
+
+    GymTokenExpiredError:
+      type: object
+      description: 令牌过期错误（体测系统）
+      properties:
+        error:
+          type: string
+          example: TokenExpired
+        message:
+          type: string
+          example: 体测系统令牌过期
+
+    LabLoginIssueError:
+      type: object
+      description: 大物实验平台登录问题
+      properties:
+        error:
+          type: string
+          example: LoginIssue
+        code:
+          type: string
+          enum: [PASSWORD_ERROR, CAPTCHA_ERROR, OTHER_ERROR]
+        message:
+          type: string
+
+    # ===== 认证请求/响应 =====
+
+    CreateCasTokenRequest:
+      type: object
+      required: [stu_id, password]
+      properties:
+        stu_id:
+          type: string
+          description: 学号
+          example: "202463010001"
+        password:
+          type: string
+          description: 个人门户密码
+          example: "your_password"
+
+    CasTokenFromCookieRequest:
+      type: object
+      required: [cookie, stu_id, password]
+      properties:
+        cookie:
+          type: string
+          description: 已保存的 CAS Cookie
+          example: "CASTGC=TGT-xxx; _pv0=xxx"
+        stu_id:
+          type: string
+          description: 学号
+          example: "202463010001"
+        password:
+          type: string
+          description: 个人门户密码
+
+    TokenAcquireRequest:
+      type: object
+      required: [cas_token]
+      properties:
+        cas_token:
+          type: string
+          description: CAS Token（cookie 字符串形式）
+
+    CasTokenResponse:
+      type: object
+      properties:
+        cookie:
+          type: string
+          description: CAS Cookie
+        stu_id:
+          type: string
+          description: 学号
+        password:
+          type: string
+          description: 密码（已加密存储）
+
+    HdjwTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          description: HeaderMap（包含 Cookie）
+          additionalProperties:
+            type: string
+
+    HdjwTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    GymTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    GymTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    DirectLoginRequest:
+      type: object
+      required: [stu_id, password]
+      properties:
+        stu_id:
+          type: string
+          description: 学号
+        password:
+          type: string
+          description: 体测系统密码
+
+    LabTokenAcquireRequest:
+      type: object
+      required: [stu_id, password, max_tried]
+      properties:
+        stu_id:
+          type: string
+          description: 学号
+        password:
+          type: string
+          description: 大物实验平台密码
+        captcha_image:
+          type: string
+          format: binary
+          description: 验证码图片数据（JPG 格式）
+        max_tried:
+          type: integer
+          description: 最大尝试次数（考虑验证码识别失败时重试）
+          minimum: 1
+          maximum: 10
+          example: 5
+
+    LabTokenFromHeadersRequest:
+      type: object
+      required: [headers, stu_id]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        stu_id:
+          type: string
+          description: 对应的学号
+
+    LabTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        stu_id:
+          type: string
+
+    NetflowTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    NetflowTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    PtTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    PtTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    XgxtTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    XgxtTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    CaTokenResponse:
+      type: object
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    CaTokenFromHeadersRequest:
+      type: object
+      required: [headers]
+      properties:
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    # ===== HDJW - 教务系统 DTO =====
+
+    Grade:
+      type: object
+      description: 课程成绩
+      properties:
+        course_id:
+          type: string
+          description: 课程代码
+          example: "CS101"
+        course_name:
+          type: string
+          description: 课程名称
+          example: "数据结构"
+        credit:
+          type: number
+          format: float
+          description: 学分
+          example: 3.0
+        course_type1:
+          type: string
+          nullable: true
+          description: 课程性质1（必修/选修）
+          example: "必修"
+        course_type2:
+          type: string
+          description: 课程性质2（通识必修/专业核心等）
+          example: "专业核心"
+        gpa:
+          type: number
+          format: float
+          description: 获得的绩点
+          example: 4.0
+        score:
+          type: integer
+          description: 获得的分数
+          example: 90
+        grade_tag:
+          type: string
+          nullable: true
+          description: 成绩标识（缓考/重修等）
+          example: "缓考"
+        grade_type:
+          type: string
+          description: 成绩类型（主修/辅修）
+          example: "主修"
+        jx0404id:
+          type: string
+          nullable: true
+          description: 成绩 ID（用于获取详情）
+
+    GradeDetailItem:
+      type: object
+      description: 课程成绩组成部分
+      properties:
+        name:
+          type: string
+          description: 成绩组成名称
+          example: "平时成绩"
+        score:
+          type: string
+          description: 该组成所占分数
+          example: "85"
+        percentage:
+          type: string
+          description: 该组成所占百分比
+          example: "30%"
+
+    CourseSchedule:
+      type: object
+      description: 课程的时间地点安排
+      properties:
+        week:
+          type: integer
+          description: 第几周上课（0-19）
+          minimum: 0
+          maximum: 19
+          example: 10
+        day:
+          type: integer
+          description: 周几上课（1=周一，7=周日）
+          minimum: 1
+          maximum: 7
+          example: 1
+        place:
+          type: string
+          description: 上课地点
+          example: "综合楼101"
+        time:
+          type: array
+          items:
+            type: integer
+            description: 大节次
+            example: 2
+
+    Course:
+      type: object
+      description: 课程信息
+      properties:
+        course_name:
+          type: string
+          example: "数据结构"
+        course_id:
+          type: string
+          example: "CS101"
+        course_type:
+          type: string
+          example: "专业核心"
+        class_name:
+          type: string
+          description: 上课班级
+          example: "计科2101"
+        area:
+          type: string
+          description: 上课校区
+          example: "南校区"
+        teacher:
+          type: string
+          description: 授课教师（多位用逗号分隔）
+          example: "张三"
+        credit:
+          type: number
+          format: float
+          example: 3.0
+        extra:
+          type: string
+          nullable: true
+          description: 额外备注信息
+          example: "实验班"
+        people:
+          type: integer
+          description: 上课人数
+          example: 45
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseSchedule'
+          description: 上课时间地点安排
+
+    ExtraCourse:
+      type: object
+      description: 无课表课程（缺少 schedule 字段）
+      properties:
+        course_name:
+          type: string
+        course_id:
+          type: string
+        course_type:
+          type: string
+        class_name:
+          type: string
+        area:
+          type: string
+        teacher:
+          type: string
+        credit:
+          type: number
+          format: float
+        extra:
+          type: string
+          nullable: true
+        people:
+          type: integer
+
+    EmptyClassroom:
+      type: object
+      description: 空教室信息
+      properties:
+        room_name:
+          type: string
+          description: 教室名称
+          example: "综105"
+        room_type:
+          type: string
+          description: 教室类型
+          example: "多媒体教室"
+        seat_count:
+          type: integer
+          description: 座位数
+          example: 120
+        exam_seat_count:
+          type: integer
+          description: 考试座位数
+          example: 100
+
+    ExamSchedule:
+      type: object
+      description: 考试安排
+      properties:
+        course_id:
+          type: string
+          description: 课程代码
+        course_name:
+          type: string
+          description: 课程名称
+        area:
+          type: string
+          nullable: true
+          description: 考试校区
+        classroom:
+          type: string
+          nullable: true
+          description: 考试教室
+        date:
+          type: string
+          format: date
+          nullable: true
+          description: 考试日期
+          example: "2025-01-10"
+        time:
+          type: string
+          nullable: true
+          description: 考试时间段
+          example: "14:00~16:00"
+        seat:
+          type: string
+          nullable: true
+          description: 座位号
+
+    RankMethod:
+      type: string
+      description: 排名计算方式
+      enum:
+        - ArithmeticAvg  # 算术平均
+        - WeightedAvg    # 加权平均
+        - Gpa            # 绩点
+
+    Rank:
+      type: object
+      description: 成绩排名结果
+      properties:
+        rank:
+          type: string
+          nullable: true
+          description: 排名（格式：排名/总人数）
+          example: "1/100"
+        score:
+          type: string
+          nullable: true
+          description: 成绩分数
+          example: "92.5"
+
+    # ===== GYM - 体测系统 DTO =====
+
+    Appointment:
+      type: object
+      description: 体测预约信息
+      properties:
+        name:
+          type: string
+          description: 预约名称
+          example: "体测预约"
+        desc:
+          type: string
+          description: 预约描述
+          example: "2025年体测"
+        show_date:
+          type: string
+          description: 系统显示的日期字符串
+          example: "2025年12月15号（周一）"
+        date:
+          type: string
+          format: date
+          description: 预约日期
+          example: "2025-12-15"
+        time:
+          type: string
+          description: 时间段
+          example: "10:00 - 11:30"
+        test_type:
+          type: integer
+          description: |
+            体测类型：
+            0=两项以上，1=身高体重，2=肺活量，3=立定跳远，
+            4=坐位体前屈，5=引体向上/仰卧起坐，7=50米，8=800米/1000米，9=视力
+        status:
+          type: integer
+          description: 预约状态（0=未预约，1=已预约，2=已完成，3=已过期，4=已失效）
+
+    GradeItemColor:
+      type: string
+      description: 体测项目成绩等级颜色
+      enum: [Green, Red]
+
+    EyeGrade:
+      type: object
+      description: 视力成绩
+      properties:
+        eyesight_right:
+          type: string
+          description: 右眼裸视力
+        eyesight_left:
+          type: string
+          description: 左眼裸视力
+        eyesight_right_detail:
+          type: string
+          description: 右眼裸视力描述
+        eyesight_left_detail:
+          type: string
+          description: 左眼裸视力描述
+        eye_mirror_right:
+          type: string
+          description: 右眼串镜视力
+        eye_mirror_right_detail:
+          type: string
+          description: 右眼串镜视力描述
+        eye_mirror_left:
+          type: string
+          description: 左眼串镜视力
+        eye_mirror_left_detail:
+          type: string
+          description: 左眼串镜视力描述
+        eye_ametropia_right:
+          type: string
+          description: 右眼屈光不正视力
+        eye_ametropia_right_detail:
+          type: string
+          description: 右眼屈光不正视力描述
+        eye_ametropia_left:
+          type: string
+          description: 左眼屈光不正视力
+        eye_ametropia_left_detail:
+          type: string
+          description: 左眼屈光不正视力描述
+
+    GradeItem:
+      type: object
+      description: 体测某个项目的成绩
+      properties:
+        color:
+          $ref: '#/components/schemas/GradeItemColor'
+        rank:
+          type: string
+          description: 等级（优秀/良好/及格/不及格/缺项/肥胖/超重）
+          example: "优秀"
+        grade:
+          type: string
+          description: 取得的成绩数据（带单位）
+          example: "192.0厘米"
+        score:
+          type: integer
+          description: 该项目得分（0-100）
+
+    GymGrade:
+      type: object
+      description: 体测成绩（完整）
+      properties:
+        name:
+          type: string
+        stu_id:
+          type: string
+        grade:
+          type: string
+          description: 总成绩文字描述
+          example: "及格"
+        score:
+          type: number
+          format: double
+          description: 总成绩分数
+          example: 72.5
+        report_desc:
+          type: string
+          description: 体测成绩描述
+          example: "暂无"
+        report_status:
+          type: string
+          description: 体测成绩状态
+          example: "部分体测值异常"
+        report_type:
+          type: string
+          description: 体测成绩类型
+          example: "正常"
+        eye:
+          $ref: '#/components/schemas/EyeGrade'
+        short_run:
+          $ref: '#/components/schemas/GradeItem'
+          description: 50米成绩
+        bmi:
+          $ref: '#/components/schemas/GradeItem'
+          description: BMI成绩
+        jump:
+          $ref: '#/components/schemas/GradeItem'
+          description: 立定跳远成绩
+        pull_and_sit:
+          $ref: '#/components/schemas/GradeItem'
+          description: 引体向上/仰卧起坐成绩
+        run:
+          $ref: '#/components/schemas/GradeItem'
+          description: 长跑成绩（800米/1000米）
+        sit_and_reach:
+          $ref: '#/components/schemas/GradeItem'
+          description: 坐位体前屈成绩
+        vc:
+          $ref: '#/components/schemas/GradeItem'
+          description: 肺活量成绩
+
+    # ===== LAB - 大物实验平台 DTO =====
+
+    Semester:
+      type: object
+      description: 大物实验平台学期信息
+      properties:
+        xn:
+          type: integer
+          description: 学年
+          example: 2025
+        xq:
+          type: integer
+          description: 学期（1或2）
+          example: 1
+        id:
+          type: string
+          description: 学期 ID（用于后续查询）
+
+    LabCourse:
+      type: object
+      description: 大物实验课程
+      properties:
+        name:
+          type: string
+          description: 课程名称
+          example: "大学物理实验A"
+        score:
+          type: string
+          nullable: true
+          description: 课程总成绩（无成绩时为 null）
+          example: "85"
+        id:
+          type: string
+          description: 课程 ID
+
+    LabSchedule:
+      type: object
+      description: 大物实验安排
+      properties:
+        seat:
+          type: string
+          description: 座位号
+          example: "A01"
+        name:
+          type: string
+          description: 实验名称
+          example: "示波器的使用"
+        course:
+          type: string
+          description: 所属课程名称
+          example: "大学物理实验A"
+        teacher:
+          type: string
+          description: 授课老师
+          example: "李老师"
+        week:
+          type: integer
+          description: 时间周次
+          example: 10
+        day:
+          type: integer
+          description: 星期几（1=周一，7=周日）
+          example: 3
+        date_time:
+          type: string
+          format: date-time
+          description: 实验日期和时间
+          example: "2025-10-15T14:00:00"
+        place:
+          type: string
+          description: 实验地点
+          example: "物理楼201"
+        phone:
+          type: string
+          nullable: true
+          description: 授课老师联系电话
+        email:
+          type: string
+          nullable: true
+          description: 授课老师邮箱
+
+    LabGradeDetailItem:
+      type: object
+      description: 实验成绩组成部分
+      properties:
+        name:
+          type: string
+          description: 成绩组成名称
+          example: "实验报告"
+        score:
+          type: number
+          format: double
+          nullable: true
+          description: 分数（无成绩时为 null）
+
+    LabGrade:
+      type: object
+      description: 实验成绩
+      properties:
+        lab_name:
+          type: string
+          description: 实验名称
+          example: "示波器的使用"
+        score:
+          type: string
+          description: 实验成绩
+          example: "90"
+        attendance:
+          type: string
+          nullable: true
+          description: 出勤情况
+          example: "全勤"
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabGradeDetailItem'
+          description: 成绩组成详情
+
+    VirtualLabGrade:
+      type: object
+      description: 虚拟实验成绩
+      properties:
+        lab_name:
+          type: string
+          description: 实验名称
+        score:
+          type: string
+          nullable: true
+          description: 实验成绩（无成绩时为 null）
+
+    # ===== NETFLOW - 校园网流量 DTO =====
+
+    ThisMonthInfo:
+      type: object
+      description: 本月校园网使用信息
+      properties:
+        total_usage:
+          type: string
+          description: 总使用流量（带单位）
+          example: "7.54GB"
+        upload_usage:
+          type: string
+          description: 已用上传流量
+        download_usage:
+          type: string
+          description: 已用下载流量
+        base_package_amount:
+          type: number
+          format: double
+          description: 免费流量总量（GB）
+          example: 20.0
+        base_package_usage:
+          type: number
+          format: double
+          description: 已用免费流量（GB）
+          example: 2.8
+        base_package_usage_percentage:
+          type: number
+          format: double
+          description: 免费流量使用率 [0,1]
+          example: 0.14
+        base_package_surplus:
+          type: number
+          format: double
+          description: 剩余免费流量（GB）
+          example: 17.2
+        extend_package_amount:
+          type: number
+          format: double
+          description: 超出流量总量（GB）
+          example: 0.0
+        extend_package_usage:
+          type: number
+          format: double
+          description: 已用超出流量（GB）
+          example: 0.0
+        extend_package_usage_percentage:
+          type: number
+          format: double
+          description: 超出流量使用率 [0,1]
+          example: 0.0
+        extend_package_surplus:
+          type: number
+          format: double
+          description: 剩余超出流量（GB）
+          example: 0.0
+
+    DetailItem:
+      type: object
+      description: 流量明细项
+      properties:
+        app:
+          type: string
+          description: 应用名称（按分类层级用 / 分隔）
+          example: "/基础协议/SSL"
+        total:
+          type: number
+          format: double
+          description: 总流量（KB）
+        download:
+          type: number
+          format: double
+          description: 下载流量（KB）
+        upload:
+          type: number
+          format: double
+          description: 上传流量（KB）
+        percentage:
+          type: number
+          format: double
+          description: 所占比例 [0,1]
+          example: 0.45
+
+    NetflowDetail:
+      type: object
+      description: 流量明细
+      properties:
+        total:
+          type: number
+          format: double
+          description: 总流量（KB）
+        upload:
+          type: number
+          format: double
+          description: 上传流量（KB）
+        download:
+          type: number
+          format: double
+          description: 下载流量（KB）
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailItem'
+          description: 明细列表
+
+    OrderItem:
+      type: object
+      description: 校园网流量账单
+      properties:
+        time:
+          type: string
+          description: 时间（YYYY-MM 格式）
+          example: "2025-01"
+        download_usage:
+          type: number
+          format: double
+          description: 下载流量（字节）
+        upload_usage:
+          type: number
+          format: double
+          description: 上传流量（字节）
+        over_usage:
+          type: number
+          format: double
+          description: 超额流量（GB）
+        should_pay:
+          type: number
+          format: double
+          description: 应缴费用（元）
+        update_time:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    OverduePaymentResponse:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          description: 欠费金额（元）
+          example: 0.0
+
+    UnlockStatus:
+      type: string
+      description: 校园网锁定状态
+      enum: [Locked, Unlocked, Unknown]
+
+    UnlockStatusResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/UnlockStatus'
+
+    # ===== PT - 个人门户 DTO =====
+
+    CardInfo:
+      type: object
+      description: 校园卡信息
+      properties:
+        id:
+          type: integer
+          format: int32
+          description: 校园卡账号
+          example: 12345678
+        balance:
+          type: number
+          format: double
+          description: 校园卡余额（元）
+          example: 156.50
+
+    CardHistoryType:
+      type: string
+      description: 校园卡历史类型
+      enum: [Consumption, Recharge]
+
+    CardHistoryItem:
+      type: object
+      description: 校园卡交易项
+      properties:
+        date_time:
+          type: string
+          format: date-time
+          description: 交易时间
+        journal_time:
+          type: string
+          format: date-time
+          description: 记账时间
+        status:
+          type: string
+          description: 交易状态
+          example: "正常"
+        id:
+          type: integer
+          format: int32
+          description: 交易 ID
+        now_balance:
+          type: number
+          format: double
+          description: 交易后余额（元）
+        amount:
+          type: number
+          format: double
+          description: 交易金额（充值为正，消费为负）
+        location:
+          type: string
+          nullable: true
+          description: 交易地点
+        name:
+          type: string
+          description: 交易名称
+          example: "食堂消费"
+
+    CardHistory:
+      type: object
+      description: 校园卡消费历史
+      properties:
+        total:
+          type: number
+          format: double
+          description: 总交易金额（元）
+        count:
+          type: integer
+          format: int32
+          description: 交易数量
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardHistoryItem'
+
+    UnreadEmailCountResponse:
+      type: object
+      description: 未读邮件数响应
+      properties:
+        count:
+          type: integer
+          format: int32
+          nullable: true
+          description: 未读邮件数（null 表示未绑定邮箱）
+          example: 5
+
+    # ===== XGXT - 学工系统 DTO =====
+
+    Gender:
+      type: string
+      description: 性别
+      enum: [Male, Female]
+
+    Level:
+      type: string
+      description: 培养层次
+      enum:
+        - Undergraduate   # 本科
+        - Postgraduate    # 硕士研究生
+        - Doctoral        # 博士研究生
+
+    Dormitory:
+      type: object
+      description: 宿舍信息
+      properties:
+        park:
+          type: string
+          nullable: true
+          description: 园区
+          example: "天马园区"
+        build:
+          type: string
+          nullable: true
+          description: 楼栋
+          example: "一区1栋"
+        room:
+          type: string
+          description: 房间号
+          example: "101"
+        raw_dormitory:
+          type: string
+          description: 原始宿舍信息
+
+    PersonalInfo:
+      type: object
+      description: 个人信息
+      properties:
+        name:
+          type: string
+          example: "张三"
+        enter_year:
+          type: integer
+          description: 入学年份/年级
+          example: 2024
+        xz:
+          type: integer
+          format: int32
+          nullable: true
+          description: 学制（年）
+          example: 4
+        stu_id:
+          type: string
+          example: "202463010001"
+        gender:
+          $ref: '#/components/schemas/Gender'
+        level:
+          $ref: '#/components/schemas/Level'
+        academy:
+          type: string
+          description: 学院
+        major:
+          type: string
+          description: 专业
+        class:
+          type: string
+          description: 班级
+        dormitory:
+          $ref: '#/components/schemas/Dormitory'
+        politic:
+          type: string
+          nullable: true
+          description: 政治面貌
+        race:
+          type: string
+          nullable: true
+          description: 民族
+        hometown:
+          type: string
+          nullable: true
+          description: 籍贯
+        phone:
+          type: string
+          nullable: true
+          description: 手机号
+        wechat:
+          type: string
+          nullable: true
+          description: 微信号
+        qq:
+          type: string
+          nullable: true
+          description: QQ号
+        email:
+          type: string
+          nullable: true
+          description: 电子邮箱
+
+    # ===== CA - 可信电子凭证 DTO =====
+
+    CaRank:
+      type: object
+      description: 成绩排名信息
+      properties:
+        all_gpa:
+          type: string
+          description: 全部课程的平均学分绩点
+          example: "4.0"
+        all_gpa_rank:
+          type: string
+          description: 全部课程的平均学分绩点排名（格式：排名/总人数）
+          example: "1/100"
+        all_weighted:
+          type: string
+          description: 全部课程的加权平均分
+          example: "92.5"
+        all_weighted_rank:
+          type: string
+          description: 全部课程的加权平均分排名
+          example: "2/100"
+        all_arithmetic:
+          type: string
+          description: 全部课程的算术平均分
+          example: "90.0"
+        all_arithmetic_rank:
+          type: string
+          description: 全部课程的算术平均分排名
+          example: "3/100"
+        must_gpa:
+          type: string
+          description: 必修课的平均学分绩点
+        must_weighted:
+          type: string
+          description: 必修课的加权平均分
+        must_arithmetic:
+          type: string
+          description: 必修课的算术平均分
+        core_gpa_rank:
+          type: string
+          description: 核心课程的平均学分绩点排名
+        core_weighted_rank:
+          type: string
+          description: 核心课程的加权平均分排名
+        core_arithmetic_rank:
+          type: string
+          description: 核心课程的算术平均分排名
+
+    # ===== WXPAY - 宿舍电量 DTO =====
+
+    ElectricityResponse:
+      type: object
+      properties:
+        electricity:
+          type: string
+          description: 电量信息（含单位）
+          example: "146.88度"

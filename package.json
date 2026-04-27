@@ -1,0 +1,45 @@
+{
+  "name": "@twisuki/hnu-query",
+  "type": "module",
+  "version": "0.0.1",
+  "packageManager": "pnpm@10.18.3",
+  "description": "湖南大学（HNU）多系统统一查询 SDK",
+  "author": "Twisuki",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "hnu",
+    "hunan-university",
+    "sdk"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "undici": "^7.11.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^8.2.0",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.0.3",
+    "tsconfig-paths": "^4.2.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
